@@ -16,6 +16,10 @@ public class EquipmentManager {
         inventory.add(equipment);
     }
 
+    public void removeEquipment(Equipment equipment) {
+        inventory.remove(equipment);
+    }
+
     public List<Equipment> getAllEquipment() {
         return new ArrayList<>(inventory);
     }

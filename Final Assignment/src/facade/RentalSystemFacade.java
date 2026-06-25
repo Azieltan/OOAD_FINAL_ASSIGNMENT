@@ -126,7 +126,7 @@ public class RentalSystemFacade {
     public void removeEquipment(String id) {
         Optional<Equipment> eqOpt = equipmentManager.findEquipmentById(id);
         if (eqOpt.isPresent()) {
-            equipmentManager.getAllEquipment().remove(eqOpt.get());
+            equipmentManager.removeEquipment(eqOpt.get());
         }
     }
 
