@@ -44,10 +44,6 @@ public class RentalSystemFacade {
         equipmentManager.addEquipment(new MediaEquipment("M202", "Epson Projector", 40.00));
         equipmentManager.addEquipment(new LaboratoryEquipment("L301", "Digital Oscilloscope", 60.00));
         equipmentManager.addEquipment(new LaboratoryEquipment("L302", "Compound Microscope", 50.00));
-        
-        // Pre-seeded renters (for returning test)
-        User student = new User("S101", "Alice", User.UserType.STUDENT);
-        registeredUsers.add(student);
     }
 
     // --- Authentication ---
