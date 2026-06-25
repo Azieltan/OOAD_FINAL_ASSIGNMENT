@@ -1,5 +1,5 @@
 @startuml Sequence Diagram - Return and Billing Calculation
-actor "Staff/Student" as client
+actor "Renter (Student/Staff)" as client
 boundary "RentalAppGUI" as gui
 control "RentalSystemFacade" as facade
 entity "RentalRecord" as record
@@ -7,17 +7,11 @@ entity "Equipment" as equip
 control "BillingManager" as billing
 entity "Bill" as bill
 
-client -> gui : Click "Process Return & Billing" (recordId, actualDays, isDamaged)
+client -> gui : Click "Process Settle & Return" (recordId, actualDays, isDamaged)
 activate gui
 
 gui -> facade : returnEquipment(recordId, actualDays, isDamaged)
 activate facade
-
-facade -> facade : findRecordById(recordId)
-activate facade
-deactivate facade
-
-note over facade: Locate matching RentalRecord
 
 facade -> record : getUser()
 activate record
@@ -29,11 +23,17 @@ activate record
 record --> facade : equipment (polymorphic)
 deactivate record
 
-facade -> facade : getPlannedDurationDays()
-activate facade
-deactivate facade
+facade -> record : getPlannedDurationDays()
+activate record
+record --> facade : plannedDays
+deactivate record
 
-facade -> billing : calculateBill(user, equipment, actualDays, plannedDays, isDamaged)
+facade -> record : getDepositPaid()
+activate record
+record --> facade : depositPaid
+deactivate record
+
+facade -> billing : calculateBill(user, equipment, actualDays, plannedDays, isDamaged, depositPaid)
 activate billing
 
 billing -> equip : calculateBaseFee(plannedDays)
@@ -41,15 +41,15 @@ activate equip
 equip --> billing : baseFee
 deactivate equip
 
-note over billing: Determine discount percentage\nbased on UserType (Staff: 20%, FY Student: 10%)
+note over billing: Determine user discount\n(Staff: 20%, FY Student: 10%)
 
 billing -> equip : calculatePenalty(lateDays, isDamaged)
 activate equip
-equip --> billing : penaltyAmount (polymorphic calculation)
+equip --> billing : penaltyAmount (polymorphic)
 deactivate equip
 
 create bill
-billing -> bill : new Bill(baseFee, discountAmount, penaltyAmount)
+billing -> bill : new Bill(baseFee, discountAmount, penaltyAmount, depositPaid)
 activate bill
 bill --> billing : bill
 deactivate bill
@@ -69,9 +69,15 @@ facade -> record : setReturnDate(date)
 activate record
 deactivate record
 
-facade -> equip : setAvailable(true)
-activate equip
-deactivate equip
+alt isDamaged
+    facade -> equip : setStatus(DAMAGED)
+    activate equip
+    deactivate equip
+else else
+    facade -> equip : setStatus(AVAILABLE)
+    activate equip
+    deactivate equip
+end
 
 facade -> bill : generateDetailedReceipt()
 activate bill
@@ -81,7 +87,7 @@ deactivate bill
 facade --> gui : successMessage + receiptString
 deactivate facade
 
-gui -> client : Display success dialogue and receipt
+gui -> client : Display settlement receipt (Refund/Pay invoice)
 deactivate gui
 
 @enduml

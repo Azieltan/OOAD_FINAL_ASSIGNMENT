@@ -1,18 +1,25 @@
 package model;
 
 public abstract class Equipment {
+    public enum EquipmentStatus {
+        AVAILABLE,
+        RENTED,
+        MAINTENANCE,
+        DAMAGED
+    }
+
     private String equipmentId;
     private String name;
     private String category;
     private double dailyRentalRate;
-    private boolean isAvailable;
+    private EquipmentStatus status;
 
     public Equipment(String equipmentId, String name, String category, double dailyRentalRate) {
         this.equipmentId = equipmentId;
         this.name = name;
         this.category = category;
         this.dailyRentalRate = dailyRentalRate;
-        this.isAvailable = true;
+        this.status = EquipmentStatus.AVAILABLE;
     }
 
     public String getEquipmentId() {
@@ -23,6 +30,10 @@ public abstract class Equipment {
         return name;
     }
 
+    public void setName(String name) {
+        this.name = name;
+    }
+
     public String getCategory() {
         return category;
     }
@@ -31,12 +42,20 @@ public abstract class Equipment {
         return dailyRentalRate;
     }
 
-    public boolean isAvailable() {
-        return isAvailable;
+    public void setDailyRentalRate(double dailyRentalRate) {
+        this.dailyRentalRate = dailyRentalRate;
     }
 
-    public void setAvailable(boolean available) {
-        isAvailable = available;
+    public EquipmentStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(EquipmentStatus status) {
+        this.status = status;
+    }
+
+    public boolean isAvailable() {
+        return this.status == EquipmentStatus.AVAILABLE;
     }
 
     // Abstract methods to demonstrate abstraction and allow polymorphic pricing/penalties
@@ -45,6 +64,6 @@ public abstract class Equipment {
 
     @Override
     public String toString() {
-        return name + " [" + category + "] - $" + dailyRentalRate + "/day";
+        return name + " [" + category + "] - $" + dailyRentalRate + "/day (" + status + ")";
     }
 }

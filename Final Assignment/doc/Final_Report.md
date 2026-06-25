@@ -1,30 +1,35 @@
 # OBJECT-ORIENTED ANALYSIS AND DESIGN (CCP6224)
 ## FINAL ASSIGNMENT REPORT
-### Smart Equipment Rental & Billing System
+### Smart Equipment Rental & Billing System (Self-Service Kiosk Model)
 
 ---
 
 ## 1. Assumptions & Design Decisions
 
-### 1.1 Assumptions
-1. **User Types**: Renter users are students or staff. Final-year students are eligible for a 10% discount on the base fee, and staff members are eligible for a 20% discount on the base fee.
-2. **Category Specifics**:
-   - **Electronics**: Base rate is linear. Late return penalty is $1.5 \times \text{daily rate} \times \text{late days}$. Damage incurs a flat $150.00 penalty.
-   - **Media Equipment**: 10% discount on daily rate if rented for more than 7 days. Late return penalty is $2.0 \times \text{daily rate} \times \text{late days}$. Damage incurs a flat $200.00 penalty.
-   - **Laboratory Equipment**: Base rate is linear. Late return penalty is $2.5 \times \text{daily rate} \times \text{late days}$. Damage incurs a flat $300.00 penalty.
-3. **Data Persistence**: In-memory collections (Lists/Maps) are used to maintain state because a persistent database is out of scope for the GUI modeling constraints of this course.
+### 1.1 Authentication & Self-Service Flow
+1. **Self-Service Renter Portal**: To build a modern "Smart System," we implemented a self-service kiosk workflow. Reners (Students and Staff) register and log in simply by inputting their **User ID** and **Name**.
+2. **Persistent Sessions**: Once a user has rented equipment, they can return to the kiosk, log in with the exact same ID and Name, and the system loads their active rental records.
+3. **Admin Verification**: Administrative access is strictly gated. The admin button triggers a credential prompt requiring ID: `admin123` and Password: `admin123`.
 
-### 1.2 Design Decisions
-- **Separation of Concerns**: We separated the domain models (`model` package) from state management (`manager` package) and user interface (`gui` package).
-- **GUI Framework**: Implemented using pure Java Swing (as mandated by the brief), leveraging a clean tabbed pane structure (`JTabbedPane`).
-- **Design Pattern**: We applied the **Facade** Design Pattern to manage system workflows.
+### 1.2 Deposit & Settlement Logic
+1. **Flat Security Deposit**: For each item checked out, a security deposit of **$50.00** is paid immediately alongside the base rental fee.
+2. **Return Deductions**: When returning an item, any late fees or damage penalties are automatically deducted from the paid deposit:
+   - **Refund**: If `Deposit > Total Penalties`, the user is immediately refunded the difference.
+   - **Invoicing**: If `Total Penalties > Deposit`, the user is billed for the remaining outstanding balance.
+
+### 1.3 Equipment Statuses
+Instead of binary availability, equipment has condition status levels:
+- `AVAILABLE` (Ready for checkout)
+- `RENTED` (Currently checked out)
+- `MAINTENANCE` (Temporarily unavailable; restricted by Admin)
+- `DAMAGED` (Damaged during rental; restricted by Admin until resolved)
 
 ---
 
 ## 2. Object-Oriented Programming (OOP) Principles Applied
 
 ### 2.1 Abstraction
-We defined an abstract base class `Equipment` inside the `model` package. It encapsulates shared properties (e.g., `equipmentId`, `name`, `dailyRentalRate`, `isAvailable`) and exposes abstract operations:
+We defined an abstract base class `Equipment` inside the `model` package. It encapsulates shared properties (e.g., `equipmentId`, `name`, `dailyRentalRate`, `status`) and exposes abstract operations:
 ```java
 public abstract double calculateBaseFee(int days);
 public abstract double calculatePenalty(int lateDays, boolean isDamaged);
@@ -77,6 +82,11 @@ Our implementation coordinates three subsystems via the `RentalSystemFacade` cla
 
 ```
 +------------------+
+|    LoginFrame    |
++--------+---------+
+         | (Switch view / Authenticate)
+         v
++------------------+
 |  RentalAppGUI    |
 +--------+---------+
          | (Simplified API)
@@ -93,7 +103,7 @@ Our implementation coordinates three subsystems via the `RentalSystemFacade` cla
 ```
 
 ### 3.3 How it Improves Flexibility & Future-Proofing
-1. **Shields the GUI**: The Swing interface (`RentalAppGUI`) only communicates with the `RentalSystemFacade`. If we decide to swap out the `BillingManager` calculation algorithms, update the database interface in `RentalManager`, or add logging subsystems, the GUI source code remains entirely unchanged.
+1. **Shields the GUI**: The Swing interface (`RentalAppGUI` and `LoginFrame`) only communicates with the `RentalSystemFacade`. If we decide to swap out the `BillingManager` calculation algorithms, update the database interface in `RentalManager`, or add logging subsystems, the GUI source code remains entirely unchanged.
 2. **Easy Subsystem Extensions**: New equipment rules or categories can be added within the subsystem classes directly. The GUI remains cleanly decoupled, preserving the Open-Closed Principle (OCP).
 
 ---
@@ -101,19 +111,19 @@ Our implementation coordinates three subsystems via the `RentalSystemFacade` cla
 ## 4. UML Diagram Explanations
 
 ### 4.1 Use Case Diagram (`uml/use_case_diagram.puml`)
-Illustrates interactions between the Actors (**Student**, **Staff**, **Final-Year Student** (generalization of Student), **Facilities Manager**) and the system use cases.
-- *Includes/Extends*: "Return Equipment" includes the "Calculate Billing Details" use case. "Calculate Billing Details" is extended by "Apply User Discount" and "Apply Category-Specific Penalty" rules under conditional flows.
+Illustrates interactions between the Actors (**Student/Staff (Renter)**, **Administrator**) and the system use cases.
+- *Includes/Extends*: "Select & Checkout Multiple Items" includes the "Pay Security Deposit & Rental Fee" use case. "Return Items & Process Deductions" includes the "Settle Refund / Balance Invoice" use case.
 
 ### 4.2 Class Diagram (`uml/class_diagram.puml`)
-Shows the static structure. It clearly displays:
-- Inheritance hierarchical structure for the three `Equipment` categories.
-- Separation of concerns between `gui`, `facade`, `manager`, and `model` packages.
+Shows the static structure. It displays:
+- The new `LoginFrame` class and its association with `RentalSystemFacade`.
+- `EquipmentStatus` and `UserType` enums.
 - Navigability, multiplicities, and specific attribute/method signatures.
 
 ### 4.3 Sequence Diagram (`uml/sequence_diagram.puml`)
 Shows step-by-step object interactions during the Return & Billing process.
 1. GUI prompts the Facade.
-2. Facade fetches the User type and the polymorphic Equipment reference from `RentalRecord`.
+2. Facade fetches the User type, the polymorphic Equipment reference, and the paid deposit amount from the `RentalRecord`.
 3. Facade delegates calculation to `BillingManager`.
 4. `BillingManager` dynamically calls the correct `calculateBaseFee` and `calculatePenalty` methods on the polymorphic `Equipment` instance, returning a structured `Bill`.
 
@@ -121,9 +131,9 @@ Shows step-by-step object interactions during the Return & Billing process.
 
 ## 5. Q&A Preparation for Interview
 
-* **Q: Why didn't you use multiple inheritance for equipment categories?**
-  * *A*: Java does not support multiple inheritance of classes (to avoid the Diamond Problem). Instead, we used a single abstract base class `Equipment` and specialized subclasses.
-* **Q: How does the Facade pattern make this system future-proof?**
-  * *A*: If a client requirements change (e.g., migrating from in-memory collections to a SQL database), we only need to rewrite the implementation inside the manager subsystem. The Facade interface signature is preserved, so no GUI refactoring is needed.
-* **Q: How is polymorphism displayed in billing?**
-  * *A*: When the `BillingManager` calculates penalties, it calls `equipment.calculatePenalty()`. Because the `equipment` variable is declared as the abstract base class but points to a concrete subclass at runtime (e.g. `LaboratoryEquipment`), the JVM automatically calls the strict 2.5x rate logic instead of the default electronics rate.
+* **Q: Why did you implement a self-service checkout rather than a desk clerk?**
+  * *A*: Self-service kiosks represent modern client demands. It reduces administrative overhead. Renter identity is authenticated during entry, auto-populating checkouts and restricting return lists to their own specific active rentals.
+* **Q: How does the deposit deduction logic work?**
+  * *A*: When a user checks out an item, they pay a $50 deposit. When returning, the system calculates the actual fees (including late returns and damages). These fees are settled directly using the deposit, and the system either refunds the remainder or prompts for additional payment.
+* **Q: How does the system handle different equipment conditions?**
+  * *A*: Equipment has a `status` field (`AVAILABLE`, `RENTED`, `MAINTENANCE`, `DAMAGED`). If an item is returned damaged, its status becomes `DAMAGED` automatically, preventing other users from renting it until the Admin updates it to `AVAILABLE` or `MAINTENANCE` via the Admin panel.

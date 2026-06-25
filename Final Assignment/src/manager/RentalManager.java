@@ -16,10 +16,10 @@ public class RentalManager {
         this.records = new ArrayList<>();
     }
 
-    public RentalRecord createRental(User user, Equipment equipment, int durationDays, LocalDate rentDate) {
+    public RentalRecord createRental(User user, Equipment equipment, int durationDays, LocalDate rentDate, double depositPaid) {
         String recordId = "R-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-        RentalRecord record = new RentalRecord(recordId, user, equipment, durationDays, rentDate);
-        equipment.setAvailable(false);
+        RentalRecord record = new RentalRecord(recordId, user, equipment, durationDays, rentDate, depositPaid);
+        equipment.setStatus(Equipment.EquipmentStatus.RENTED);
         records.add(record);
         return record;
     }

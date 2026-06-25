@@ -2,13 +2,30 @@
 skinparam classAttributeIconSize 0
 
 package "gui" {
+    class LoginFrame {
+        - facade: RentalSystemFacade
+        - userIdField: JTextField
+        - userNameField: JTextField
+        - userTypeCombo: JComboBox<String>
+        - initializeUI(): void
+        - handleUserLogin(): void
+        - showAdminLoginDialog(): void
+    }
+
     class RentalAppGUI {
         - facade: RentalSystemFacade
+        - isAdmin: boolean
         - initializeUI(): void
+        - handleLogout(): void
         - refreshAllData(): void
+        ' Admin UI actions
         - handleAddEquipment(): void
-        - handleRentEquipment(): void
-        - handleReturnEquipment(): void
+        - handleUpdateEquipment(): void
+        - handleRemoveEquipment(): void
+        ' User UI actions
+        - updateCartSummary(): void
+        - handleCheckout(): void
+        - handleReturn(): void
     }
 }
 
@@ -17,12 +34,22 @@ package "facade" {
         - equipmentManager: EquipmentManager
         - rentalManager: RentalManager
         - billingManager: BillingManager
+        - registeredUsers: List<User>
+        - currentUser: User
+        - isAdminSession: boolean
+        + adminLogin(id: String, password: String): boolean
+        + userLogin(id: String, name: String, userTypeStr: String): String
+        + logout(): void
+        + getCurrentUser(): User
         + addEquipment(id: String, name: String, category: String, rate: double): void
+        + removeEquipment(id: String): void
+        + updateEquipment(id: String, name: String, rate: double, statusStr: String): void
         + getAllEquipment(): List<Equipment>
         + getAvailableEquipment(): List<Equipment>
-        + rentEquipment(userId: String, userName: String, userTypeStr: String, equipmentId: String, durationDays: int): String
+        + rentEquipmentList(equipmentIds: List<String>, durationDays: int): String
         + returnEquipment(recordId: String, actualDurationDays: int, isDamaged: boolean): String
         + getActiveRentals(): List<RentalRecord>
+        + getCurrentUserActiveRentals(): List<RentalRecord>
         + getAllRentals(): List<RentalRecord>
     }
 }
@@ -38,14 +65,14 @@ package "manager" {
 
     class RentalManager {
         - records: List<RentalRecord>
-        + createRental(user: User, equipment: Equipment, durationDays: int, rentDate: LocalDate): RentalRecord
+        + createRental(user: User, equipment: Equipment, durationDays: int, rentDate: LocalDate, depositPaid: double): RentalRecord
         + getAllRecords(): List<RentalRecord>
         + findRecordById(recordId: String): Optional<RentalRecord>
         + getActiveRecords(): List<RentalRecord>
     }
 
     class BillingManager {
-        + calculateBill(user: User, equipment: Equipment, actualDurationDays: int, plannedDurationDays: int, isDamaged: boolean): Bill
+        + calculateBill(user: User, equipment: Equipment, actualDurationDays: int, plannedDurationDays: int, isDamaged: boolean, depositPaid: double): Bill
     }
 }
 
@@ -55,15 +82,25 @@ package "model" {
         - name: String
         - category: String
         - dailyRentalRate: double
-        - isAvailable: boolean
+        - status: EquipmentStatus
         + getEquipmentId(): String
         + getName(): String
+        + setName(name: String): void
         + getCategory(): String
         + getDailyRentalRate(): double
+        + setDailyRentalRate(rate: double): void
+        + getStatus(): EquipmentStatus
+        + setStatus(status: EquipmentStatus): void
         + isAvailable(): boolean
-        + setAvailable(available: boolean): void
         + {abstract} calculateBaseFee(days: int): double
         + {abstract} calculatePenalty(lateDays: int, isDamaged: boolean): double
+    }
+
+    enum EquipmentStatus {
+        AVAILABLE
+        RENTED
+        MAINTENANCE
+        DAMAGED
     }
 
     class Electronics {
@@ -104,12 +141,14 @@ package "model" {
         - rentDate: LocalDate
         - returnDate: LocalDate
         - status: RentalStatus
+        - depositPaid: double
         - bill: Bill
         + getRecordId(): String
         + getUser(): User
         + getEquipment(): Equipment
         + getPlannedDurationDays(): int
         + getStatus(): RentalStatus
+        + getDepositPaid(): double
         + setReturnDate(returnDate: LocalDate): void
         + setStatus(status: RentalStatus): void
         + setBill(bill: Bill): void
@@ -124,21 +163,29 @@ package "model" {
         - baseFee: double
         - discountAmount: double
         - penaltyAmount: double
-        - netPayable: double
+        - depositPaid: double
+        - totalCharges: double
+        - netSettlement: double
         + getBaseFee(): double
         + getDiscountAmount(): double
         + getPenaltyAmount(): double
-        + getNetPayable(): double
+        + getDepositPaid(): double
+        + getTotalCharges(): double
+        + getNetSettlement(): double
         + generateDetailedReceipt(): String
     }
 }
 
 ' Relationships
+LoginFrame --> RentalSystemFacade
+LoginFrame ..> RentalAppGUI : creates
+
 RentalAppGUI --> RentalSystemFacade
 
 RentalSystemFacade *-- EquipmentManager
 RentalSystemFacade *-- RentalManager
 RentalSystemFacade *-- BillingManager
+RentalSystemFacade o-- User
 
 EquipmentManager o-- Equipment
 RentalManager o-- RentalRecord
@@ -149,6 +196,7 @@ RentalRecord --> Bill
 
 User +-- UserType
 RentalRecord +-- RentalStatus
+Equipment +-- EquipmentStatus
 
 Electronics -up-|> Equipment
 MediaEquipment -up-|> Equipment

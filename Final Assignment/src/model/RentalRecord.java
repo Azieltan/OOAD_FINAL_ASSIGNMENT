@@ -15,15 +15,17 @@ public class RentalRecord {
     private LocalDate rentDate;
     private LocalDate returnDate;
     private RentalStatus status;
+    private double depositPaid;
     private Bill bill;
 
-    public RentalRecord(String recordId, User user, Equipment equipment, int plannedDurationDays, LocalDate rentDate) {
+    public RentalRecord(String recordId, User user, Equipment equipment, int plannedDurationDays, LocalDate rentDate, double depositPaid) {
         this.recordId = recordId;
         this.user = user;
         this.equipment = equipment;
         this.plannedDurationDays = plannedDurationDays;
         this.rentDate = rentDate;
         this.status = RentalStatus.ACTIVE;
+        this.depositPaid = depositPaid;
     }
 
     public String getRecordId() {
@@ -60,6 +62,10 @@ public class RentalRecord {
 
     public void setStatus(RentalStatus status) {
         this.status = status;
+    }
+
+    public double getDepositPaid() {
+        return depositPaid;
     }
 
     public Bill getBill() {

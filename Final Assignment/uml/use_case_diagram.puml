@@ -2,36 +2,40 @@
 left to right direction
 skinparam packageStyle rectangle
 
-actor "Student" as student
-actor "Staff" as staff
-actor "Final-Year Student" as fy_student
-
-fy_student -up-|> student
+actor "Student/Staff (Renter)" as renter
+actor "Administrator" as admin
 
 rectangle "Smart Equipment Rental & Billing System" {
-    usecase "View Equipment Catalog" as UC1
-    usecase "Rent Equipment (Checkout)" as UC2
-    usecase "Return Equipment" as UC3
-    usecase "Calculate Billing Details" as UC4
-    usecase "Apply User Discount" as UC5
-    usecase "Apply Category-Specific Penalty" as UC6
-    usecase "Add Equipment to Catalog" as UC7
+    ' User Kiosk operations
+    usecase "Enter Self-Service Kiosk (Login/Register)" as UC1
+    usecase "View Available Equipment" as UC2
+    usecase "Select & Checkout Multiple Items" as UC3
+    usecase "Pay Security Deposit & Rental Fee" as UC4
+    usecase "View Personal Active Rentals" as UC5
+    usecase "Return Items & Process Deductions" as UC6
+    usecase "Settle Refund / Balance Invoice" as UC7
+    
+    ' Admin Console operations
+    usecase "Admin Verification Login (admin123)" as UC8
+    usecase "Add Equipment to Catalog" as UC9
+    usecase "Remove Equipment from Catalog" as UC10
+    usecase "Update Equipment Rate & Condition" as UC11
+    usecase "View Global System Rental Logs" as UC12
 }
 
-student --> UC1
-student --> UC2
-student --> UC3
-
-staff --> UC1
-staff --> UC2
-staff --> UC3
+renter --> UC1
+renter --> UC2
+renter --> UC3
+renter --> UC5
+renter --> UC6
 
 UC3 .> UC4 : <<include>>
-UC4 .> UC5 : <<extend>>
-UC4 .> UC6 : <<extend>>
+UC6 .> UC7 : <<include>>
 
-actor "Campus Facilities Manager" as manager
-manager --> UC7
-manager --> UC1
+admin --> UC8
+admin --> UC9
+admin --> UC10
+admin --> UC11
+admin --> UC12
 
 @enduml

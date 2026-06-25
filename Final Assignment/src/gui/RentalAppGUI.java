@@ -6,6 +6,7 @@ import java.awt.Color;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.GridLayout;
+import java.util.ArrayList;
 import java.util.List;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
@@ -20,6 +21,7 @@ import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.ListSelectionModel;
 import javax.swing.border.TitledBorder;
 import javax.swing.table.DefaultTableModel;
 import model.Equipment;
@@ -27,188 +29,294 @@ import model.RentalRecord;
 
 public class RentalAppGUI extends JFrame {
     private RentalSystemFacade facade;
+    private boolean isAdmin;
     
-    // UI Elements - Catalog Tab
-    private JTable equipmentTable;
-    private DefaultTableModel catalogModel;
+    // UI Elements - Admin Mode
+    private JTable adminInventoryTable;
+    private DefaultTableModel adminInventoryModel;
     private JTextField addIdField, addNameField, addRateField;
     private JComboBox<String> addCategoryCombo;
     
-    // UI Elements - Rent Tab
-    private JTextField rentUserIdField, rentUserNameField, rentDurationField;
-    private JComboBox<String> rentUserTypeCombo;
-    private JComboBox<String> rentEquipmentCombo;
+    private JTextField updateNameField, updateRateField;
+    private JComboBox<String> updateStatusCombo;
     
-    // UI Elements - Return Tab
-    private JTable activeRentalsTable;
-    private DefaultTableModel activeRentalsModel;
+    private JTable adminRentalsTable;
+    private DefaultTableModel adminRentalsModel;
+
+    // UI Elements - User Mode
+    private JTable userCatalogTable;
+    private DefaultTableModel userCatalogModel;
+    private JTextField rentDurationField;
+    private JLabel cartSummaryLabel;
+    
+    private JTable userRentalsTable;
+    private DefaultTableModel userRentalsModel;
     private JTextField returnDaysField;
     private JCheckBox damageCheck;
     private JTextArea receiptArea;
 
-    public RentalAppGUI() {
-        this.facade = new RentalSystemFacade();
+    public RentalAppGUI(RentalSystemFacade facade, boolean isAdmin) {
+        this.facade = facade;
+        this.isAdmin = isAdmin;
         initializeUI();
         refreshAllData();
     }
 
     private void initializeUI() {
-        setTitle("Smart Equipment Rental & Billing System");
-        setSize(850, 600);
+        setTitle(isAdmin ? "Smart Rental System - ADMIN PANEL" : "Smart Rental System - SELF-SERVICE KIOSK");
+        setSize(900, 650);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         
         // Colors & Fonts
-        Color headerColor = new Color(41, 128, 185);
+        Color headerColor = isAdmin ? new Color(192, 57, 43) : new Color(41, 128, 185); // Red for admin, Blue for user
         Font titleFont = new Font("Segoe UI", Font.BOLD, 18);
         
-        // Header
-        JPanel headerPanel = new JPanel();
+        // Header Panel
+        JPanel headerPanel = new JPanel(new BorderLayout());
         headerPanel.setBackground(headerColor);
-        JLabel titleLabel = new JLabel("CAMPUS SMART EQUIPMENT RENTAL & BILLING SYSTEM");
+        headerPanel.setBorder(BorderFactory.createEmptyBorder(10, 15, 10, 15));
+        
+        String welcomeText = isAdmin 
+                ? "ADMINISTRATIVE CONTROL CONSOLE" 
+                : "WELCOME, " + facade.getCurrentUser().getName().toUpperCase() + " (" + facade.getCurrentUser().getType() + ")";
+        
+        JLabel titleLabel = new JLabel(welcomeText);
         titleLabel.setForeground(Color.WHITE);
         titleLabel.setFont(titleFont);
-        headerPanel.add(titleLabel);
+        headerPanel.add(titleLabel, BorderLayout.WEST);
+        
+        JButton logoutBtn = new JButton("Log Out");
+        logoutBtn.setFocusPainted(false);
+        logoutBtn.addActionListener(e -> handleLogout());
+        headerPanel.add(logoutBtn, BorderLayout.EAST);
+        
         add(headerPanel, BorderLayout.NORTH);
         
         // Tabs
         JTabbedPane tabbedPane = new JTabbedPane();
-        tabbedPane.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        tabbedPane.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         
-        tabbedPane.addTab("Equipment Catalog", createCatalogTab());
-        tabbedPane.addTab("Rent Equipment", createRentTab());
-        tabbedPane.addTab("Return & Billing", createReturnTab());
+        if (isAdmin) {
+            tabbedPane.addTab("Manage Inventory", createAdminInventoryTab());
+            tabbedPane.addTab("System Rental Logs", createAdminRentalsTab());
+        } else {
+            tabbedPane.addTab("Rent Equipment", createUserRentTab());
+            tabbedPane.addTab("My Active Rentals", createUserReturnTab());
+        }
         
         add(tabbedPane, BorderLayout.CENTER);
     }
 
-    private JPanel createCatalogTab() {
+    private void handleLogout() {
+        facade.logout();
+        LoginFrame loginFrame = new LoginFrame(facade);
+        loginFrame.setVisible(true);
+        this.dispose();
+    }
+
+    // ==========================================
+    // ADMIN TABS CREATION
+    // ==========================================
+
+    private JPanel createAdminInventoryTab() {
         JPanel panel = new JPanel(new BorderLayout(10, 10));
         panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         
-        // Equipment Table
-        String[] columns = {"ID", "Name", "Category", "Daily Rate ($)", "Availability"};
-        catalogModel = new DefaultTableModel(columns, 0) {
+        // Table
+        String[] columns = {"ID", "Name", "Category", "Rate ($/day)", "Status"};
+        adminInventoryModel = new DefaultTableModel(columns, 0) {
             @Override
             public boolean isCellEditable(int r, int c) { return false; }
         };
-        equipmentTable = new JTable(catalogModel);
-        panel.add(new JScrollPane(equipmentTable), BorderLayout.CENTER);
+        adminInventoryTable = new JTable(adminInventoryModel);
+        adminInventoryTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        adminInventoryTable.getSelectionModel().addListSelectionListener(e -> handleInventorySelect());
+        panel.add(new JScrollPane(adminInventoryTable), BorderLayout.CENTER);
         
-        // Add Equipment Form
-        JPanel formPanel = new JPanel(new GridLayout(5, 2, 5, 5));
-        formPanel.setBorder(BorderFactory.createTitledBorder(
-            BorderFactory.createEtchedBorder(), "Add New Equipment", TitledBorder.LEFT, TitledBorder.TOP,
+        // Operations panel (Add and Edit forms side by side)
+        JPanel opsPanel = new JPanel(new GridLayout(1, 2, 15, 10));
+        
+        // 1. Add Form
+        JPanel addForm = new JPanel(new GridLayout(5, 2, 5, 5));
+        addForm.setBorder(BorderFactory.createTitledBorder(
+            BorderFactory.createEtchedBorder(), "Add Equipment", TitledBorder.LEFT, TitledBorder.TOP,
             new Font("Segoe UI", Font.BOLD, 12)
         ));
         
-        formPanel.add(new JLabel("Equipment ID:"));
+        addForm.add(new JLabel("ID:"));
         addIdField = new JTextField();
-        formPanel.add(addIdField);
+        addForm.add(addIdField);
         
-        formPanel.add(new JLabel("Name:"));
+        addForm.add(new JLabel("Name:"));
         addNameField = new JTextField();
-        formPanel.add(addNameField);
+        addForm.add(addNameField);
         
-        formPanel.add(new JLabel("Category:"));
+        addForm.add(new JLabel("Category:"));
         addCategoryCombo = new JComboBox<>(new String[]{"Electronics", "Media Equipment", "Laboratory Equipment"});
-        formPanel.add(addCategoryCombo);
+        addForm.add(addCategoryCombo);
         
-        formPanel.add(new JLabel("Daily Rental Rate ($):"));
+        addForm.add(new JLabel("Daily Rate ($):"));
         addRateField = new JTextField();
-        formPanel.add(addRateField);
+        addForm.add(addRateField);
         
         JButton addBtn = new JButton("Add Equipment");
-        addBtn.setFont(new Font("Segoe UI", Font.BOLD, 12));
         addBtn.addActionListener(e -> handleAddEquipment());
-        formPanel.add(addBtn);
+        addForm.add(addBtn);
+        opsPanel.add(addForm);
         
-        panel.add(formPanel, BorderLayout.SOUTH);
-        return panel;
-    }
-
-    private JPanel createRentTab() {
-        JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
-        
-        JPanel formPanel = new JPanel(new GridLayout(6, 2, 10, 10));
-        formPanel.setBorder(BorderFactory.createTitledBorder(
-            BorderFactory.createEtchedBorder(), "Rental Registration Form", TitledBorder.LEFT, TitledBorder.TOP,
-            new Font("Segoe UI", Font.BOLD, 14)
-        ));
-        
-        formPanel.add(new JLabel("Renter User ID:"));
-        rentUserIdField = new JTextField();
-        formPanel.add(rentUserIdField);
-        
-        formPanel.add(new JLabel("Renter Name:"));
-        rentUserNameField = new JTextField();
-        formPanel.add(rentUserNameField);
-        
-        formPanel.add(new JLabel("User Type:"));
-        rentUserTypeCombo = new JComboBox<>(new String[]{"Student", "Staff", "Final Year Student"});
-        formPanel.add(rentUserTypeCombo);
-        
-        formPanel.add(new JLabel("Select Equipment:"));
-        rentEquipmentCombo = new JComboBox<>();
-        formPanel.add(rentEquipmentCombo);
-        
-        formPanel.add(new JLabel("Planned Duration (Days):"));
-        rentDurationField = new JTextField();
-        formPanel.add(rentDurationField);
-        
-        JButton rentBtn = new JButton("Process Rental Checkout");
-        rentBtn.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        rentBtn.addActionListener(e -> handleRentEquipment());
-        formPanel.add(rentBtn);
-        
-        panel.add(formPanel, BorderLayout.NORTH);
-        return panel;
-    }
-
-    private JPanel createReturnTab() {
-        JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        
-        // Active rentals table
-        String[] columns = {"Record ID", "Renter Name", "Equipment Name", "Planned Days", "Status"};
-        activeRentalsModel = new DefaultTableModel(columns, 0) {
-            @Override
-            public boolean isCellEditable(int r, int c) { return false; }
-        };
-        activeRentalsTable = new JTable(activeRentalsModel);
-        
-        JPanel leftPanel = new JPanel(new BorderLayout(5, 5));
-        leftPanel.add(new JLabel("Active Rental Transactions:"), BorderLayout.NORTH);
-        leftPanel.add(new JScrollPane(activeRentalsTable), BorderLayout.CENTER);
-        
-        // Return processing form
-        JPanel returnForm = new JPanel(new GridLayout(4, 2, 5, 5));
-        returnForm.setBorder(BorderFactory.createTitledBorder(
-            BorderFactory.createEtchedBorder(), "Return & Penalty Processing", TitledBorder.LEFT, TitledBorder.TOP,
+        // 2. Edit/Update Form
+        JPanel editForm = new JPanel(new GridLayout(5, 2, 5, 5));
+        editForm.setBorder(BorderFactory.createTitledBorder(
+            BorderFactory.createEtchedBorder(), "Edit Selected Equipment", TitledBorder.LEFT, TitledBorder.TOP,
             new Font("Segoe UI", Font.BOLD, 12)
         ));
         
-        returnForm.add(new JLabel("Actual Rental Duration (Days):"));
+        editForm.add(new JLabel("Name:"));
+        updateNameField = new JTextField();
+        editForm.add(updateNameField);
+        
+        editForm.add(new JLabel("Daily Rate ($):"));
+        updateRateField = new JTextField();
+        editForm.add(updateRateField);
+        
+        editForm.add(new JLabel("Status:"));
+        updateStatusCombo = new JComboBox<>(new String[]{"AVAILABLE", "MAINTENANCE", "DAMAGED"});
+        editForm.add(updateStatusCombo);
+        
+        JButton updateBtn = new JButton("Update Info");
+        updateBtn.addActionListener(e -> handleUpdateEquipment());
+        editForm.add(updateBtn);
+        
+        JButton removeBtn = new JButton("Remove Item");
+        removeBtn.setBackground(new Color(231, 76, 60));
+        removeBtn.setForeground(Color.WHITE);
+        removeBtn.addActionListener(e -> handleRemoveEquipment());
+        editForm.add(removeBtn);
+        
+        opsPanel.add(editForm);
+        
+        panel.add(opsPanel, BorderLayout.SOUTH);
+        return panel;
+    }
+
+    private JPanel createAdminRentalsTab() {
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        
+        String[] columns = {"Record ID", "Renter ID", "Renter Name", "Equipment ID", "Equipment Name", "Duration (Days)", "Status", "Deposit ($)"};
+        adminRentalsModel = new DefaultTableModel(columns, 0) {
+            @Override
+            public boolean isCellEditable(int r, int c) { return false; }
+        };
+        adminRentalsTable = new JTable(adminRentalsModel);
+        panel.add(new JScrollPane(adminRentalsTable), BorderLayout.CENTER);
+        
+        return panel;
+    }
+
+    // ==========================================
+    // USER TABS CREATION (Self-Service)
+    // ==========================================
+
+    private JPanel createUserRentTab() {
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        
+        // Available Catalog Table
+        String[] columns = {"ID", "Name", "Category", "Daily Rate ($)"};
+        userCatalogModel = new DefaultTableModel(columns, 0) {
+            @Override
+            public boolean isCellEditable(int r, int c) { return false; }
+        };
+        userCatalogTable = new JTable(userCatalogModel);
+        userCatalogTable.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+        userCatalogTable.getSelectionModel().addListSelectionListener(e -> updateCartSummary());
+        
+        JPanel leftPanel = new JPanel(new BorderLayout(5, 5));
+        leftPanel.add(new JLabel("Select items to rent (Hold Ctrl to select multiple items):"), BorderLayout.NORTH);
+        leftPanel.add(new JScrollPane(userCatalogTable), BorderLayout.CENTER);
+        panel.add(leftPanel, BorderLayout.CENTER);
+        
+        // Checkout details
+        JPanel checkoutPanel = new JPanel(new GridLayout(4, 1, 10, 10));
+        checkoutPanel.setBorder(BorderFactory.createTitledBorder(
+            BorderFactory.createEtchedBorder(), "Self-Service Checkout", TitledBorder.LEFT, TitledBorder.TOP,
+            new Font("Segoe UI", Font.BOLD, 13)
+        ));
+        
+        JPanel durPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        durPanel.add(new JLabel("Rental Duration (Days): "));
+        rentDurationField = new JTextField("3", 5);
+        rentDurationField.addActionListener(e -> updateCartSummary());
+        durPanel.add(rentDurationField);
+        checkoutPanel.add(durPanel);
+        
+        cartSummaryLabel = new JLabel("<html>Items Selected: 0<br/>Total Deposit ($50/item): $0.00<br/>Estimated Rental Fee: $0.00<br/><b>Total Pay Now: $0.00</b></html>");
+        cartSummaryLabel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        checkoutPanel.add(cartSummaryLabel);
+        
+        JButton recalculateBtn = new JButton("Recalculate Estimate");
+        recalculateBtn.addActionListener(e -> updateCartSummary());
+        checkoutPanel.add(recalculateBtn);
+
+        JButton checkoutBtn = new JButton("Confirm Pay & Checkout");
+        checkoutBtn.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        checkoutBtn.setBackground(new Color(46, 204, 113));
+        checkoutBtn.setForeground(Color.WHITE);
+        checkoutBtn.addActionListener(e -> handleCheckout());
+        checkoutPanel.add(checkoutBtn);
+        
+        panel.add(checkoutPanel, BorderLayout.EAST);
+        
+        return panel;
+    }
+
+    private JPanel createUserReturnTab() {
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        
+        String[] columns = {"Record ID", "Equipment Name", "Planned Duration (Days)", "Rent Date", "Deposit ($)"};
+        userRentalsModel = new DefaultTableModel(columns, 0) {
+            @Override
+            public boolean isCellEditable(int r, int c) { return false; }
+        };
+        userRentalsTable = new JTable(userRentalsModel);
+        userRentalsTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        
+        JPanel leftPanel = new JPanel(new BorderLayout(5, 5));
+        leftPanel.add(new JLabel("Your Active Rentals:"), BorderLayout.NORTH);
+        leftPanel.add(new JScrollPane(userRentalsTable), BorderLayout.CENTER);
+        
+        // Return details
+        JPanel returnForm = new JPanel(new GridLayout(4, 2, 5, 5));
+        returnForm.setBorder(BorderFactory.createTitledBorder(
+            BorderFactory.createEtchedBorder(), "Return Settlement Form", TitledBorder.LEFT, TitledBorder.TOP,
+            new Font("Segoe UI", Font.BOLD, 12)
+        ));
+        
+        returnForm.add(new JLabel("Actual Duration (Days):"));
         returnDaysField = new JTextField();
         returnForm.add(returnDaysField);
         
-        returnForm.add(new JLabel("Equipment Damaged?"));
-        damageCheck = new JCheckBox("Yes (Apply damage penalties)");
+        returnForm.add(new JLabel("Is Item Damaged?"));
+        damageCheck = new JCheckBox("Yes");
         returnForm.add(damageCheck);
         
-        JButton returnBtn = new JButton("Process Return & Billing");
+        JButton returnBtn = new JButton("Process Settle & Return");
         returnBtn.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        returnBtn.addActionListener(e -> handleReturnEquipment());
+        returnBtn.setBackground(new Color(41, 128, 185));
+        returnBtn.setForeground(Color.WHITE);
+        returnBtn.addActionListener(e -> handleReturn());
         returnForm.add(returnBtn);
         
         leftPanel.add(returnForm, BorderLayout.SOUTH);
         panel.add(leftPanel, BorderLayout.CENTER);
         
-        // Receipt Output Display
+        // Receipt display
         JPanel rightPanel = new JPanel(new BorderLayout(5, 5));
         rightPanel.setBorder(BorderFactory.createTitledBorder(
-            BorderFactory.createEtchedBorder(), "Billing & Detailed Receipt Output", TitledBorder.LEFT, TitledBorder.TOP,
+            BorderFactory.createEtchedBorder(), "Billing Settlement Receipt", TitledBorder.LEFT, TitledBorder.TOP,
             new Font("Segoe UI", Font.BOLD, 12)
         ));
         receiptArea = new JTextArea(15, 25);
@@ -221,8 +329,23 @@ public class RentalAppGUI extends JFrame {
         return panel;
     }
 
-    // --- Action Handlers ---
-    
+    // ==========================================
+    // EVENT & DATA ACTIONS
+    // ==========================================
+
+    private void handleInventorySelect() {
+        int selected = adminInventoryTable.getSelectedRow();
+        if (selected != -1) {
+            String name = (String) adminInventoryModel.getValueAt(selected, 1);
+            String rateStr = (String) adminInventoryModel.getValueAt(selected, 3);
+            String status = (String) adminInventoryModel.getValueAt(selected, 4);
+            
+            updateNameField.setText(name);
+            updateRateField.setText(rateStr);
+            updateStatusCombo.setSelectedItem(status);
+        }
+    }
+
     private void handleAddEquipment() {
         String id = addIdField.getText().trim();
         String name = addNameField.getText().trim();
@@ -230,120 +353,191 @@ public class RentalAppGUI extends JFrame {
         String rateStr = addRateField.getText().trim();
         
         if (id.isEmpty() || name.isEmpty() || rateStr.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Please fill in all fields to add equipment.", "Validation Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Please fill in all fields.", "Validation Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
-        
         try {
             double rate = Double.parseDouble(rateStr);
-            if (rate <= 0) {
-                JOptionPane.showMessageDialog(this, "Daily rate must be greater than zero.", "Validation Error", JOptionPane.ERROR_MESSAGE);
-                return;
-            }
             facade.addEquipment(id, name, category, rate);
             JOptionPane.showMessageDialog(this, "Equipment added successfully!");
-            
-            // Clear fields
             addIdField.setText("");
             addNameField.setText("");
             addRateField.setText("");
-            
             refreshAllData();
-        } catch (NumberFormatException ex) {
-            JOptionPane.showMessageDialog(this, "Daily rate must be a valid decimal number.", "Validation Error", JOptionPane.ERROR_MESSAGE);
-        } catch (IllegalArgumentException ex) {
-            JOptionPane.showMessageDialog(this, ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        } catch (NumberFormatException e) {
+            JOptionPane.showMessageDialog(this, "Daily rate must be a valid decimal.", "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
-    private void handleRentEquipment() {
-        String userId = rentUserIdField.getText().trim();
-        String name = rentUserNameField.getText().trim();
-        String userType = (String) rentUserTypeCombo.getSelectedItem();
-        String equipSelection = (String) rentEquipmentCombo.getSelectedItem();
-        String durationStr = rentDurationField.getText().trim();
+    private void handleUpdateEquipment() {
+        int selected = adminInventoryTable.getSelectedRow();
+        if (selected == -1) {
+            JOptionPane.showMessageDialog(this, "Please select an item to update.", "Selection Error", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        String id = (String) adminInventoryModel.getValueAt(selected, 0);
+        String name = updateNameField.getText().trim();
+        String rateStr = updateRateField.getText().trim();
+        String status = (String) updateStatusCombo.getSelectedItem();
         
-        if (equipSelection == null) {
-            JOptionPane.showMessageDialog(this, "No available equipment selected.", "Validation Error", JOptionPane.ERROR_MESSAGE);
+        if (name.isEmpty() || rateStr.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Fields cannot be empty.", "Validation Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        try {
+            double rate = Double.parseDouble(rateStr);
+            facade.updateEquipment(id, name, rate, status);
+            JOptionPane.showMessageDialog(this, "Equipment updated!");
+            refreshAllData();
+        } catch (NumberFormatException e) {
+            JOptionPane.showMessageDialog(this, "Invalid rate.", "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void handleRemoveEquipment() {
+        int selected = adminInventoryTable.getSelectedRow();
+        if (selected == -1) {
+            JOptionPane.showMessageDialog(this, "Please select an item to remove.", "Selection Error", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        String id = (String) adminInventoryModel.getValueAt(selected, 0);
+        facade.removeEquipment(id);
+        JOptionPane.showMessageDialog(this, "Equipment removed.");
+        refreshAllData();
+    }
+
+    private void updateCartSummary() {
+        int[] rows = userCatalogTable.getSelectedRows();
+        String durStr = rentDurationField.getText().trim();
+        int days = 1;
+        try {
+            days = Integer.parseInt(durStr);
+        } catch (NumberFormatException e) {
+            // Keep 1 day
+        }
+        
+        double estRent = 0.0;
+        double deposit = rows.length * 50.00;
+        
+        for (int row : rows) {
+            String id = (String) userCatalogModel.getValueAt(row, 0);
+            Equipment eq = facade.getAllEquipment().stream().filter(e -> e.getEquipmentId().equals(id)).findFirst().orElse(null);
+            if (eq != null) {
+                double base = eq.calculateBaseFee(days);
+                // Simple discount preview
+                double discount = 0.0;
+                if (facade.getCurrentUser().getType() == model.User.UserType.STAFF) {
+                    discount = base * 0.20;
+                } else if (facade.getCurrentUser().getType() == model.User.UserType.FINAL_YEAR_STUDENT) {
+                    discount = base * 0.10;
+                }
+                estRent += (base - discount);
+            }
+        }
+        
+        cartSummaryLabel.setText(String.format(
+            "<html>Items Selected: %d<br/>Total Deposit ($50/item): $%.2f<br/>Estimated Rental Fee: $%.2f<br/><b>Total Pay Now: $%.2f</b></html>",
+            rows.length, deposit, estRent, deposit + estRent
+        ));
+    }
+
+    private void handleCheckout() {
+        int[] rows = userCatalogTable.getSelectedRows();
+        if (rows.length == 0) {
+            JOptionPane.showMessageDialog(this, "Please select at least 1 item to rent.", "Cart Empty", JOptionPane.WARNING_MESSAGE);
             return;
         }
         
-        String equipId = equipSelection.split(" - ")[0];
-        
+        String durStr = rentDurationField.getText().trim();
         try {
-            int duration = Integer.parseInt(durationStr);
-            String response = facade.rentEquipment(userId, name, userType, equipId, duration);
+            int duration = Integer.parseInt(durStr);
+            List<String> ids = new ArrayList<>();
+            for (int r : rows) {
+                ids.add((String) userCatalogModel.getValueAt(r, 0));
+            }
+            
+            String response = facade.rentEquipmentList(ids, duration);
             JOptionPane.showMessageDialog(this, response);
-            
-            if (response.startsWith("Success")) {
-                rentUserIdField.setText("");
-                rentUserNameField.setText("");
-                rentDurationField.setText("");
-                refreshAllData();
-            }
-        } catch (NumberFormatException ex) {
-            JOptionPane.showMessageDialog(this, "Duration must be a valid integer number of days.", "Validation Error", JOptionPane.ERROR_MESSAGE);
+            refreshAllData();
+        } catch (NumberFormatException e) {
+            JOptionPane.showMessageDialog(this, "Invalid duration value.", "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
-    private void handleReturnEquipment() {
-        int selectedRow = activeRentalsTable.getSelectedRow();
-        if (selectedRow == -1) {
-            JOptionPane.showMessageDialog(this, "Please select an active rental transaction from the table.", "Selection Error", JOptionPane.WARNING_MESSAGE);
+    private void handleReturn() {
+        int selected = userRentalsTable.getSelectedRow();
+        if (selected == -1) {
+            JOptionPane.showMessageDialog(this, "Please select a record from the table.", "Selection Error", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        
-        String recordId = (String) activeRentalsModel.getValueAt(selectedRow, 0);
-        String actualDaysStr = returnDaysField.getText().trim();
-        boolean isDamaged = damageCheck.isSelected();
+        String recordId = (String) userRentalsModel.getValueAt(selected, 0);
+        String actDaysStr = returnDaysField.getText().trim();
+        boolean damaged = damageCheck.isSelected();
         
         try {
-            int actualDays = Integer.parseInt(actualDaysStr);
-            String result = facade.returnEquipment(recordId, actualDays, isDamaged);
+            int days = Integer.parseInt(actDaysStr);
+            String result = facade.returnEquipment(recordId, days, damaged);
             receiptArea.setText(result);
-            
-            if (result.startsWith("Success")) {
-                returnDaysField.setText("");
-                damageCheck.setSelected(false);
-                refreshAllData();
-            }
-        } catch (NumberFormatException ex) {
-            JOptionPane.showMessageDialog(this, "Actual rental duration must be a valid integer number of days.", "Validation Error", JOptionPane.ERROR_MESSAGE);
+            returnDaysField.setText("");
+            damageCheck.setSelected(false);
+            refreshAllData();
+        } catch (NumberFormatException e) {
+            JOptionPane.showMessageDialog(this, "Invalid duration days.", "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private void refreshAllData() {
-        // 1. Refresh Catalog Table
-        catalogModel.setRowCount(0);
-        List<Equipment> allEquip = facade.getAllEquipment();
-        for (Equipment eq : allEquip) {
-            catalogModel.addRow(new Object[]{
-                eq.getEquipmentId(),
-                eq.getName(),
-                eq.getCategory(),
-                String.format("%.2f", eq.getDailyRentalRate()),
-                eq.isAvailable() ? "Available" : "Rented"
-            });
-        }
-        
-        // 2. Refresh Rent Combo Box
-        rentEquipmentCombo.removeAllItems();
-        List<Equipment> availEquip = facade.getAvailableEquipment();
-        for (Equipment eq : availEquip) {
-            rentEquipmentCombo.addItem(eq.getEquipmentId() + " - " + eq.getName());
-        }
-        
-        // 3. Refresh Active Rentals Table
-        activeRentalsModel.setRowCount(0);
-        List<RentalRecord> activeRentals = facade.getActiveRentals();
-        for (RentalRecord r : activeRentals) {
-            activeRentalsModel.addRow(new Object[]{
-                r.getRecordId(),
-                r.getUser().getName(),
-                r.getEquipment().getName(),
-                r.getPlannedDurationDays(),
-                r.getStatus().toString()
-            });
+        if (isAdmin) {
+            // Admin Table
+            adminInventoryModel.setRowCount(0);
+            for (Equipment eq : facade.getAllEquipment()) {
+                adminInventoryModel.addRow(new Object[]{
+                    eq.getEquipmentId(),
+                    eq.getName(),
+                    eq.getCategory(),
+                    String.format("%.2f", eq.getDailyRentalRate()),
+                    eq.getStatus().toString()
+                });
+            }
+            
+            // Logs
+            adminRentalsModel.setRowCount(0);
+            for (RentalRecord r : facade.getAllRentals()) {
+                adminRentalsModel.addRow(new Object[]{
+                    r.getRecordId(),
+                    r.getUser().getUserId(),
+                    r.getUser().getName(),
+                    r.getEquipment().getEquipmentId(),
+                    r.getEquipment().getName(),
+                    r.getPlannedDurationDays(),
+                    r.getStatus().toString(),
+                    String.format("%.2f", r.getDepositPaid())
+                });
+            }
+        } else {
+            // User Catalog
+            userCatalogModel.setRowCount(0);
+            for (Equipment eq : facade.getAvailableEquipment()) {
+                userCatalogModel.addRow(new Object[]{
+                    eq.getEquipmentId(),
+                    eq.getName(),
+                    eq.getCategory(),
+                    String.format("%.2f", eq.getDailyRentalRate())
+                });
+            }
+            updateCartSummary();
+            
+            // User Rentals
+            userRentalsModel.setRowCount(0);
+            for (RentalRecord r : facade.getCurrentUserActiveRentals()) {
+                userRentalsModel.addRow(new Object[]{
+                    r.getRecordId(),
+                    r.getEquipment().getName(),
+                    r.getPlannedDurationDays(),
+                    r.getRentDate().toString(),
+                    String.format("%.2f", r.getDepositPaid())
+                });
+            }
         }
     }
 }
