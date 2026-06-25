@@ -1,0 +1,19 @@
+@startuml
+title Add Patient
+
+actor Receptionist
+participant DashboardFrame
+participant SystemController
+participant PatientService
+database HospitalRepository
+
+Receptionist -> DashboardFrame: enter name, age, gender, history
+DashboardFrame -> SystemController: addPatient(name, age, gender, history)
+SystemController -> PatientService: addPatient(name, age, gender, history)
+PatientService -> HospitalRepository: addPatient(name, age, gender, history)
+HospitalRepository -> HospitalRepository: create Patient with next ID
+HospitalRepository --> PatientService: patient
+PatientService --> SystemController: patient
+SystemController --> DashboardFrame: patient
+DashboardFrame -> Receptionist: refresh patient table
+@enduml

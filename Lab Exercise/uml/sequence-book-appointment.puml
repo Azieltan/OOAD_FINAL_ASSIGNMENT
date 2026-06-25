@@ -1,0 +1,35 @@
+@startuml
+title Book Appointment
+
+actor Receptionist
+participant DashboardFrame
+participant SystemController
+participant AppointmentService
+participant PatientService
+participant DoctorService
+database HospitalRepository
+
+Receptionist -> DashboardFrame: choose patient, doctor, date, time
+DashboardFrame -> SystemController: bookAppointment(patientId, doctorId, date, time)
+SystemController -> AppointmentService: bookAppointment(patientId, doctorId, date, time)
+AppointmentService -> HospitalRepository: getAppointments()
+HospitalRepository --> AppointmentService: current appointments
+
+alt duplicate doctor slot exists
+  AppointmentService --> DashboardFrame: DuplicateAppointmentException
+  DashboardFrame -> Receptionist: show duplicate-slot error
+else slot available
+  AppointmentService -> PatientService: findPatient(patientId)
+  PatientService -> HospitalRepository: getPatients()
+  HospitalRepository --> PatientService: patients
+  PatientService --> AppointmentService: patient
+  AppointmentService -> DoctorService: findDoctor(doctorId)
+  DoctorService -> HospitalRepository: getDoctors()
+  HospitalRepository --> DoctorService: doctors
+  DoctorService --> AppointmentService: doctor
+  AppointmentService -> HospitalRepository: addAppointment(patient, doctor, date, time)
+  HospitalRepository --> AppointmentService: appointment
+  AppointmentService --> DashboardFrame: appointment
+  DashboardFrame -> Receptionist: refresh appointment list
+end
+@enduml

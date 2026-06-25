@@ -1,0 +1,23 @@
+@startuml
+title Login Process
+
+actor User
+participant LoginFrame
+participant SystemController
+participant AuthenticationService
+database HospitalRepository
+
+User -> LoginFrame: enter username and password
+LoginFrame -> SystemController: login(username, password)
+SystemController -> AuthenticationService: login(username, password)
+AuthenticationService -> HospitalRepository: getUsers()
+HospitalRepository --> AuthenticationService: users
+AuthenticationService --> SystemController: matching User or null
+SystemController --> LoginFrame: login result
+
+alt valid credentials
+  LoginFrame -> LoginFrame: open DashboardFrame by role
+else invalid credentials
+  LoginFrame -> User: show error message
+end
+@enduml

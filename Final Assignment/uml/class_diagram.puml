@@ -1,0 +1,157 @@
+@startuml Class Diagram
+skinparam classAttributeIconSize 0
+
+package "gui" {
+    class RentalAppGUI {
+        - facade: RentalSystemFacade
+        - initializeUI(): void
+        - refreshAllData(): void
+        - handleAddEquipment(): void
+        - handleRentEquipment(): void
+        - handleReturnEquipment(): void
+    }
+}
+
+package "facade" {
+    class RentalSystemFacade {
+        - equipmentManager: EquipmentManager
+        - rentalManager: RentalManager
+        - billingManager: BillingManager
+        + addEquipment(id: String, name: String, category: String, rate: double): void
+        + getAllEquipment(): List<Equipment>
+        + getAvailableEquipment(): List<Equipment>
+        + rentEquipment(userId: String, userName: String, userTypeStr: String, equipmentId: String, durationDays: int): String
+        + returnEquipment(recordId: String, actualDurationDays: int, isDamaged: boolean): String
+        + getActiveRentals(): List<RentalRecord>
+        + getAllRentals(): List<RentalRecord>
+    }
+}
+
+package "manager" {
+    class EquipmentManager {
+        - inventory: List<Equipment>
+        + addEquipment(equipment: Equipment): void
+        + getAllEquipment(): List<Equipment>
+        + getAvailableEquipment(): List<Equipment>
+        + findEquipmentById(id: String): Optional<Equipment>
+    }
+
+    class RentalManager {
+        - records: List<RentalRecord>
+        + createRental(user: User, equipment: Equipment, durationDays: int, rentDate: LocalDate): RentalRecord
+        + getAllRecords(): List<RentalRecord>
+        + findRecordById(recordId: String): Optional<RentalRecord>
+        + getActiveRecords(): List<RentalRecord>
+    }
+
+    class BillingManager {
+        + calculateBill(user: User, equipment: Equipment, actualDurationDays: int, plannedDurationDays: int, isDamaged: boolean): Bill
+    }
+}
+
+package "model" {
+    abstract class Equipment {
+        - equipmentId: String
+        - name: String
+        - category: String
+        - dailyRentalRate: double
+        - isAvailable: boolean
+        + getEquipmentId(): String
+        + getName(): String
+        + getCategory(): String
+        + getDailyRentalRate(): double
+        + isAvailable(): boolean
+        + setAvailable(available: boolean): void
+        + {abstract} calculateBaseFee(days: int): double
+        + {abstract} calculatePenalty(lateDays: int, isDamaged: boolean): double
+    }
+
+    class Electronics {
+        + calculateBaseFee(days: int): double
+        + calculatePenalty(lateDays: int, isDamaged: boolean): double
+    }
+
+    class MediaEquipment {
+        + calculateBaseFee(days: int): double
+        + calculatePenalty(lateDays: int, isDamaged: boolean): double
+    }
+
+    class LaboratoryEquipment {
+        + calculateBaseFee(days: int): double
+        + calculatePenalty(lateDays: int, isDamaged: boolean): double
+    }
+
+    class User {
+        - userId: String
+        - name: String
+        - type: UserType
+        + getUserId(): String
+        + getName(): String
+        + getType(): UserType
+    }
+
+    enum UserType {
+        STUDENT
+        STAFF
+        FINAL_YEAR_STUDENT
+    }
+
+    class RentalRecord {
+        - recordId: String
+        - user: User
+        - equipment: Equipment
+        - plannedDurationDays: int
+        - rentDate: LocalDate
+        - returnDate: LocalDate
+        - status: RentalStatus
+        - bill: Bill
+        + getRecordId(): String
+        + getUser(): User
+        + getEquipment(): Equipment
+        + getPlannedDurationDays(): int
+        + getStatus(): RentalStatus
+        + setReturnDate(returnDate: LocalDate): void
+        + setStatus(status: RentalStatus): void
+        + setBill(bill: Bill): void
+    }
+
+    enum RentalStatus {
+        ACTIVE
+        RETURNED
+    }
+
+    class Bill {
+        - baseFee: double
+        - discountAmount: double
+        - penaltyAmount: double
+        - netPayable: double
+        + getBaseFee(): double
+        + getDiscountAmount(): double
+        + getPenaltyAmount(): double
+        + getNetPayable(): double
+        + generateDetailedReceipt(): String
+    }
+}
+
+' Relationships
+RentalAppGUI --> RentalSystemFacade
+
+RentalSystemFacade *-- EquipmentManager
+RentalSystemFacade *-- RentalManager
+RentalSystemFacade *-- BillingManager
+
+EquipmentManager o-- Equipment
+RentalManager o-- RentalRecord
+
+RentalRecord --> User
+RentalRecord --> Equipment
+RentalRecord --> Bill
+
+User +-- UserType
+RentalRecord +-- RentalStatus
+
+Electronics -up-|> Equipment
+MediaEquipment -up-|> Equipment
+LaboratoryEquipment -up-|> Equipment
+
+@enduml

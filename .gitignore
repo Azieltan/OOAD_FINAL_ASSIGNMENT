@@ -1,0 +1,14 @@
+# Ignore compiled Java class files
+*.class
+bin/
+**/bin/
+
+# Ignore temporary extraction files
+temp_lec11/
+temp_lec11.zip
+temp_ppt/
+submission_temp/
+**/submission_temp/
+
+# Ignore lecture slides (large files)
+lecture slides/

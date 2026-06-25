@@ -1,0 +1,87 @@
+@startuml Sequence Diagram - Return and Billing Calculation
+actor "Staff/Student" as client
+boundary "RentalAppGUI" as gui
+control "RentalSystemFacade" as facade
+entity "RentalRecord" as record
+entity "Equipment" as equip
+control "BillingManager" as billing
+entity "Bill" as bill
+
+client -> gui : Click "Process Return & Billing" (recordId, actualDays, isDamaged)
+activate gui
+
+gui -> facade : returnEquipment(recordId, actualDays, isDamaged)
+activate facade
+
+facade -> facade : findRecordById(recordId)
+activate facade
+deactivate facade
+
+note over facade: Locate matching RentalRecord
+
+facade -> record : getUser()
+activate record
+record --> facade : user
+deactivate record
+
+facade -> record : getEquipment()
+activate record
+record --> facade : equipment (polymorphic)
+deactivate record
+
+facade -> facade : getPlannedDurationDays()
+activate facade
+deactivate facade
+
+facade -> billing : calculateBill(user, equipment, actualDays, plannedDays, isDamaged)
+activate billing
+
+billing -> equip : calculateBaseFee(plannedDays)
+activate equip
+equip --> billing : baseFee
+deactivate equip
+
+note over billing: Determine discount percentage\nbased on UserType (Staff: 20%, FY Student: 10%)
+
+billing -> equip : calculatePenalty(lateDays, isDamaged)
+activate equip
+equip --> billing : penaltyAmount (polymorphic calculation)
+deactivate equip
+
+create bill
+billing -> bill : new Bill(baseFee, discountAmount, penaltyAmount)
+activate bill
+bill --> billing : bill
+deactivate bill
+
+billing --> facade : bill
+deactivate billing
+
+facade -> record : setBill(bill)
+activate record
+deactivate record
+
+facade -> record : setStatus(RETURNED)
+activate record
+deactivate record
+
+facade -> record : setReturnDate(date)
+activate record
+deactivate record
+
+facade -> equip : setAvailable(true)
+activate equip
+deactivate equip
+
+facade -> bill : generateDetailedReceipt()
+activate bill
+bill --> facade : receiptString
+deactivate bill
+
+facade --> gui : successMessage + receiptString
+deactivate facade
+
+gui -> client : Display success dialogue and receipt
+deactivate gui
+
+@enduml
