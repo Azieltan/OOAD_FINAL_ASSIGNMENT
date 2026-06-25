@@ -223,18 +223,24 @@ public class RentalAppGUI extends JFrame {
         JPanel panel = new JPanel(new BorderLayout(10, 10));
         panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         
-        // Available Catalog Table
-        String[] columns = {"ID", "Name", "Category", "Daily Rate ($)"};
+        // Available Catalog Table with Checkbox
+        String[] columns = {"Select", "ID", "Name", "Category", "Daily Rate ($)"};
         userCatalogModel = new DefaultTableModel(columns, 0) {
             @Override
-            public boolean isCellEditable(int r, int c) { return false; }
+            public Class<?> getColumnClass(int c) {
+                return c == 0 ? Boolean.class : super.getColumnClass(c);
+            }
+            @Override
+            public boolean isCellEditable(int r, int c) {
+                return c == 0;
+            }
         };
         userCatalogTable = new JTable(userCatalogModel);
-        userCatalogTable.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
-        userCatalogTable.getSelectionModel().addListSelectionListener(e -> updateCartSummary());
+        userCatalogTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        userCatalogModel.addTableModelListener(e -> updateCartSummary());
         
         JPanel leftPanel = new JPanel(new BorderLayout(5, 5));
-        leftPanel.add(new JLabel("Select items to rent (Hold Ctrl to select multiple items):"), BorderLayout.NORTH);
+        leftPanel.add(new JLabel("Check the boxes next to the items you wish to rent:"), BorderLayout.NORTH);
         leftPanel.add(new JScrollPane(userCatalogTable), BorderLayout.CENTER);
         panel.add(leftPanel, BorderLayout.CENTER);
         
@@ -276,16 +282,22 @@ public class RentalAppGUI extends JFrame {
         JPanel panel = new JPanel(new BorderLayout(10, 10));
         panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         
-        String[] columns = {"Record ID", "Equipment Name", "Planned Duration (Days)", "Rent Date", "Deposit ($)"};
+        String[] columns = {"Select", "Record ID", "Equipment Name", "Planned Duration (Days)", "Rent Date", "Deposit ($)"};
         userRentalsModel = new DefaultTableModel(columns, 0) {
             @Override
-            public boolean isCellEditable(int r, int c) { return false; }
+            public Class<?> getColumnClass(int c) {
+                return c == 0 ? Boolean.class : super.getColumnClass(c);
+            }
+            @Override
+            public boolean isCellEditable(int r, int c) {
+                return c == 0;
+            }
         };
         userRentalsTable = new JTable(userRentalsModel);
         userRentalsTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         
         JPanel leftPanel = new JPanel(new BorderLayout(5, 5));
-        leftPanel.add(new JLabel("Your Active Rentals:"), BorderLayout.NORTH);
+        leftPanel.add(new JLabel("Check the boxes next to the items you wish to return:"), BorderLayout.NORTH);
         leftPanel.add(new JScrollPane(userRentalsTable), BorderLayout.CENTER);
         
         // Return details
@@ -407,7 +419,6 @@ public class RentalAppGUI extends JFrame {
     }
 
     private void updateCartSummary() {
-        int[] rows = userCatalogTable.getSelectedRows();
         String durStr = rentDurationField.getText().trim();
         int days = 1;
         try {
@@ -417,45 +428,53 @@ public class RentalAppGUI extends JFrame {
         }
         
         double estRent = 0.0;
-        double deposit = rows.length * 50.00;
+        double deposit = 0.0;
+        int selectedCount = 0;
         
-        for (int row : rows) {
-            String id = (String) userCatalogModel.getValueAt(row, 0);
-            Equipment eq = facade.getAllEquipment().stream().filter(e -> e.getEquipmentId().equals(id)).findFirst().orElse(null);
-            if (eq != null) {
-                double base = eq.calculateBaseFee(days);
-                // Simple discount preview
-                double discount = 0.0;
-                if (facade.getCurrentUser().getType() == model.User.UserType.STAFF) {
-                    discount = base * 0.20;
-                } else if (facade.getCurrentUser().getType() == model.User.UserType.FINAL_YEAR_STUDENT) {
-                    discount = base * 0.10;
+        for (int i = 0; i < userCatalogModel.getRowCount(); i++) {
+            Boolean checked = (Boolean) userCatalogModel.getValueAt(i, 0);
+            if (checked != null && checked) {
+                String id = (String) userCatalogModel.getValueAt(i, 1);
+                Equipment eq = facade.getAllEquipment().stream().filter(e -> e.getEquipmentId().equals(id)).findFirst().orElse(null);
+                if (eq != null) {
+                    double base = eq.calculateBaseFee(days);
+                    // Simple discount preview
+                    double discount = 0.0;
+                    if (facade.getCurrentUser().getType() == model.User.UserType.STAFF) {
+                        discount = base * 0.20;
+                    } else if (facade.getCurrentUser().getType() == model.User.UserType.FINAL_YEAR_STUDENT) {
+                        discount = base * 0.10;
+                    }
+                    estRent += (base - discount);
+                    deposit += 50.00;
+                    selectedCount++;
                 }
-                estRent += (base - discount);
             }
         }
         
         cartSummaryLabel.setText(String.format(
             "<html>Items Selected: %d<br/>Total Deposit ($50/item): $%.2f<br/>Estimated Rental Fee: $%.2f<br/><b>Total Pay Now: $%.2f</b></html>",
-            rows.length, deposit, estRent, deposit + estRent
+            selectedCount, deposit, estRent, deposit + estRent
         ));
     }
 
     private void handleCheckout() {
-        int[] rows = userCatalogTable.getSelectedRows();
-        if (rows.length == 0) {
-            JOptionPane.showMessageDialog(this, "Please select at least 1 item to rent.", "Cart Empty", JOptionPane.WARNING_MESSAGE);
+        List<String> ids = new ArrayList<>();
+        for (int i = 0; i < userCatalogModel.getRowCount(); i++) {
+            Boolean checked = (Boolean) userCatalogModel.getValueAt(i, 0);
+            if (checked != null && checked) {
+                ids.add((String) userCatalogModel.getValueAt(i, 1));
+            }
+        }
+
+        if (ids.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Please check at least 1 item to rent.", "Cart Empty", JOptionPane.WARNING_MESSAGE);
             return;
         }
         
         String durStr = rentDurationField.getText().trim();
         try {
             int duration = Integer.parseInt(durStr);
-            List<String> ids = new ArrayList<>();
-            for (int r : rows) {
-                ids.add((String) userCatalogModel.getValueAt(r, 0));
-            }
-            
             String response = facade.rentEquipmentList(ids, duration);
             JOptionPane.showMessageDialog(this, response);
             refreshAllData();
@@ -465,18 +484,25 @@ public class RentalAppGUI extends JFrame {
     }
 
     private void handleReturn() {
-        int selected = userRentalsTable.getSelectedRow();
-        if (selected == -1) {
-            JOptionPane.showMessageDialog(this, "Please select a record from the table.", "Selection Error", JOptionPane.WARNING_MESSAGE);
+        List<String> ids = new ArrayList<>();
+        for (int i = 0; i < userRentalsModel.getRowCount(); i++) {
+            Boolean checked = (Boolean) userRentalsModel.getValueAt(i, 0);
+            if (checked != null && checked) {
+                ids.add((String) userRentalsModel.getValueAt(i, 1));
+            }
+        }
+
+        if (ids.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Please check at least 1 record from the table.", "Selection Error", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        String recordId = (String) userRentalsModel.getValueAt(selected, 0);
+        
         String actDaysStr = returnDaysField.getText().trim();
         boolean damaged = damageCheck.isSelected();
         
         try {
             int days = Integer.parseInt(actDaysStr);
-            String result = facade.returnEquipment(recordId, days, damaged);
+            String result = facade.returnEquipmentList(ids, days, damaged);
             receiptArea.setText(result);
             returnDaysField.setText("");
             damageCheck.setSelected(false);
@@ -519,10 +545,11 @@ public class RentalAppGUI extends JFrame {
             userCatalogModel.setRowCount(0);
             for (Equipment eq : facade.getAvailableEquipment()) {
                 userCatalogModel.addRow(new Object[]{
+                    Boolean.FALSE,
                     eq.getEquipmentId(),
                     eq.getName(),
                     eq.getCategory(),
-                    String.format("%.2f", eq.getDailyRentalRate())
+                    eq.getDailyRentalRate()
                 });
             }
             updateCartSummary();
@@ -531,11 +558,12 @@ public class RentalAppGUI extends JFrame {
             userRentalsModel.setRowCount(0);
             for (RentalRecord r : facade.getCurrentUserActiveRentals()) {
                 userRentalsModel.addRow(new Object[]{
+                    Boolean.FALSE,
                     r.getRecordId(),
                     r.getEquipment().getName(),
                     r.getPlannedDurationDays(),
                     r.getRentDate().toString(),
-                    String.format("%.2f", r.getDepositPaid())
+                    r.getDepositPaid()
                 });
             }
         }

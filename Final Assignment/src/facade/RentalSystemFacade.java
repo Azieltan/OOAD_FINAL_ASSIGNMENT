@@ -244,6 +244,93 @@ public class RentalSystemFacade {
         return "Success! Item '" + equipment.getName() + "' returned.\n\n" + bill.generateDetailedReceipt();
     }
 
+    public String returnEquipmentList(List<String> recordIds, int actualDurationDays, boolean isDamaged) {
+        if (recordIds == null || recordIds.isEmpty()) {
+            return "Error: No rental records selected.";
+        }
+        if (actualDurationDays < 0) {
+            return "Error: Actual duration cannot be negative.";
+        }
+
+        double totalBaseFee = 0;
+        double totalDiscount = 0;
+        double totalPenalty = 0;
+        double totalDeposit = 0;
+        double totalCharges = 0;
+        int count = 0;
+        StringBuilder returnedItemsDetails = new StringBuilder();
+
+        for (String recordId : recordIds) {
+            Optional<RentalRecord> recOpt = rentalManager.findRecordById(recordId);
+            if (recOpt.isPresent()) {
+                RentalRecord record = recOpt.get();
+                if (record.getStatus() == RentalRecord.RentalStatus.ACTIVE) {
+                    Equipment equipment = record.getEquipment();
+
+                    Bill bill = billingManager.calculateBill(
+                            record.getUser(),
+                            equipment,
+                            actualDurationDays,
+                            record.getPlannedDurationDays(),
+                            isDamaged,
+                            record.getDepositPaid()
+                    );
+
+                    record.setBill(bill);
+                    record.setReturnDate(record.getRentDate().plusDays(actualDurationDays));
+                    record.setStatus(RentalRecord.RentalStatus.RETURNED);
+
+                    if (isDamaged) {
+                        equipment.setStatus(Equipment.EquipmentStatus.DAMAGED);
+                    } else {
+                        equipment.setStatus(Equipment.EquipmentStatus.AVAILABLE);
+                    }
+
+                    totalBaseFee += bill.getBaseFee();
+                    totalDiscount += bill.getDiscountAmount();
+                    totalPenalty += bill.getPenaltyAmount();
+                    totalDeposit += bill.getDepositPaid();
+                    totalCharges += bill.getTotalCharges();
+                    count++;
+
+                    returnedItemsDetails.append(" - ").append(equipment.getName()).append(" (").append(equipment.getCategory()).append(")\n");
+                }
+            }
+        }
+
+        if (count == 0) {
+            return "Error: No active rental records could be processed.";
+        }
+
+        double netSettlement = totalDeposit - totalCharges;
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("====================================\n");
+        sb.append("   CONSOLIDATED RETURN RECEIPT      \n");
+        sb.append("====================================\n");
+        sb.append("Items Returned:\n").append(returnedItemsDetails);
+        sb.append("------------------------------------\n");
+        sb.append(String.format("Total Base Fees:    $%8.2f\n", totalBaseFee));
+        sb.append(String.format("Total Discounts:   -$%8.2f\n", totalDiscount));
+        sb.append(String.format("Total Penalties:    $%8.2f\n", totalPenalty));
+        sb.append("------------------------------------\n");
+        sb.append(String.format("Consolidated Cost:  $%8.2f\n", totalCharges));
+        sb.append(String.format("Deposits Credited:  $%8.2f\n", totalDeposit));
+        sb.append("------------------------------------\n");
+        if (netSettlement >= 0) {
+            sb.append(String.format("Consolidated Refund: $%8.2f\n", netSettlement));
+            sb.append("====================================\n");
+            sb.append(" STATUS: CLOSED - DEPOSITS REFUNDED \n");
+        } else {
+            sb.append(String.format("Outstanding Balance: $%8.2f\n", Math.abs(netSettlement)));
+            sb.append("====================================\n");
+            sb.append(" STATUS: CLOSED - BALANCE SETTLED   \n");
+        }
+        sb.append("====================================\n");
+
+        return "Success! Returned " + count + " items.\n\n" + sb.toString();
+    }
+
     public List<RentalRecord> getActiveRentals() {
         return rentalManager.getActiveRecords();
     }
